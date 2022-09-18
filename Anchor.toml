@@ -2,7 +2,7 @@
 seeds = false
 skip-lint = false
 [programs.localnet]
-pdas = "Fg6PaFpoGXkYsidMpWTK6W2BeZ7FEfcYkg476zPFsLnS"
+pdas = "9oXTjDJcDWYD8UQUX3CFNjH7sXzdWhf8dwwfAy4iu9C1"
 
 [registry]
 url = "https://api.apr.dev"
