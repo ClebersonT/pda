@@ -1,5 +1,9 @@
 import * as anchor from "@project-serum/anchor";
 import { Pdas } from "../target/types/pdas";
+import { Connection, PublicKey, Transaction, LAMPORTS_PER_SOL, Signer } from "@solana/web3.js";
+import { getFileBrz, getBalance, getFile, generateKeypairLocal, ESCROW_ACCOUNT_DATA_LAYOUT, getKeypair, getPublicKey, getTokenBalance, logError, writePublicKey, } from "../src/utils";
+
+const connection = new Connection("http://localhost:8899", "confirmed");
 
 //para que possa imprimir no console
 function shortKey(key: anchor.web3.PublicKey){
@@ -8,7 +12,7 @@ function shortKey(key: anchor.web3.PublicKey){
 
 describe("pdas", () => {
 
-  const provider = anchor.AnchorProvider.env() 
+  const provider = anchor.AnchorProvider.env();
   // Configure the client to use the local cluster.
   anchor.setProvider(provider);
   const program = anchor.workspace.Pdas as anchor.Program<Pdas>;
@@ -25,12 +29,12 @@ describe("pdas", () => {
   }
 
   //retorna o PDA associado
-  async function derivePda(color: string, pubKey: anchor.web3.PublicKey){
+  async function derivePda(treasure: string, pubKey: anchor.web3.PublicKey){
     let [pda, _] = await anchor.web3.PublicKey.findProgramAddress(
       [
         pubKey.toBuffer(),
         Buffer.from("_"),
-        Buffer.from(color)
+        Buffer.from(treasure)
       ],
       program.programId
     );
@@ -38,72 +42,56 @@ describe("pdas", () => {
   }
 
   //criar contabil
-  async function createLedgerAccount(
-    color: string,
+  async function createTreasureAccount(
+    treasure: string,
     pda: anchor.web3.PublicKey,
     wallet: anchor.web3.Keypair){
 
-        await program.methods.createLedger(color)
+        await program.methods.createTreasure(treasure,0,0,0,0,0,0,0,0)
         .accounts({
-          ledgerAccount: pda,
+          treasureAccount: pda,
           wallet: wallet.publicKey,
         })
         .signers([wallet])
         .rpc()
   }
 
-  async function modifyLedger(
-    color: string,
-    newBalance: number,
+  async function getDatabase(
+    treasure: string,
     wallet: anchor.web3.Keypair
   ){
     console.log("--------------------------------------------------")
     let data;
-    let pda = await derivePda(color, wallet.publicKey);
+    let pda = await derivePda("treasure", wallet.publicKey);
 
-    console.log(`Checking if account ${shortKey(pda)} exists for color: ${color}...`)
+    console.log(`Checking if account ${shortKey(pda)} exists for treasure...`)
     try {
-      data = await program.account.ledger.fetch(pda);
+      data = await program.account.database.fetch(pda);
       console.log("Its does.")
     } catch (error) {
       console.log("It does Not. Creating...");
-      await createLedgerAccount(color, pda, wallet);
-      data = await program.account.ledger.fetch(pda);
+      await createTreasureAccount("treasure", pda, wallet);
+      data = await program.account.database.fetch(pda);
     };
 
     console.log("Success.");
-    console.log("Data.");
-    console.log(`Color: ${data.color}   Balance: ${data.balance}`);
-    console.log(`Modifying balance of ${data.color} from  ${data.balance} to ${newBalance}`);
-
-
-    await program.methods.modifyLedger(newBalance).accounts({
-      ledgerAccount: pda,
-      wallet: wallet.publicKey,
-    })
-    .signers([wallet])
-    .rpc();
-
-    data = await program.account.ledger.fetch(pda);
-    console.log("New Data.");
-    console.log(`Color: ${data.color}   Balance: ${data.balance}`);
-    console.log("Success.");
+    console.log("Data." + JSON.stringify(data));
   }
-
 
   it("Is initialized!", async () => {
     // Add your test here.
-    //const tx = await program.methods.initialize().rpc();
-    //console.log("Your transaction signature", tx);
+    //keypair CattleProgram
+    let exist = getFile("cattleProgram-keypair");
+    if(!exist){generateKeypairLocal("cattleProgram-keypair")}
+    const CattleProgramKeypair = getKeypair("cattleProgram-keypair");
 
-    const testKeypair1 = await generateKeypair();
-    await modifyLedger("red",  2, testKeypair1);
-    await modifyLedger("red",  4, testKeypair1);
-    await modifyLedger("blue",  2, testKeypair1);
+    console.log("Requesting SOL for treasure...");
+    await connection.requestAirdrop(CattleProgramKeypair.publicKey, LAMPORTS_PER_SOL * 10);
+    await new Promise( resolve =>  setTimeout(resolve, 1000)); //sleep
+    let balance= await getBalance(CattleProgramKeypair.publicKey, connection);
+    console.log("BALANCE SOL TREASURE "+ CattleProgramKeypair.publicKey +": "+ `${ balance / LAMPORTS_PER_SOL} SOL`);
 
-    const testKeypair2 = await generateKeypair();
-    await modifyLedger("red",  3, testKeypair2);
-    await modifyLedger("green",  3, testKeypair2);
+    await getDatabase("treasure", CattleProgramKeypair);
 
   });
 });
